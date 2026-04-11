@@ -8,7 +8,7 @@ export default async function ReportsLayout({ children }: Readonly<{ children: R
   const session = await getServerSession(authOptions);
 
   if (!session?.user) redirect('/login');
-  if (!roleHasPermission(session.user.role, 'reports:view')) redirect('/dashboard');
+  if (!roleHasPermission(session.user.role, 'analytics:admin')) redirect('/dashboard');
 
   return <>{children}</>;
 }

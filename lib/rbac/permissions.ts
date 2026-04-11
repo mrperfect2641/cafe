@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   'menu:write',
   'staff:manage',
   'reports:view',
+  'analytics:admin',
   'settings:manage',
 ] as const;
 

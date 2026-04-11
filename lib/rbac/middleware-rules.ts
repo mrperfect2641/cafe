@@ -2,7 +2,10 @@ import type { Permission } from '@/lib/rbac/permissions';
 
 /** Dashboard page segments: required permission to enter (JWT role checked in middleware). */
 export function pagePermissionForPath(pathname: string): Permission | null {
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/reports')) {
+  if (pathname.startsWith('/reports')) {
+    return 'analytics:admin';
+  }
+  if (pathname.startsWith('/dashboard')) {
     return 'reports:view';
   }
   if (pathname.startsWith('/users')) {
@@ -48,6 +51,10 @@ export function apiAccessFor(pathname: string, method: string): ApiAccess {
 
   if (pathname.startsWith('/api/orders')) {
     return method === 'POST' ? 'billing:checkout' : 'session';
+  }
+
+  if (pathname.startsWith('/api/analytics')) {
+    return 'analytics:admin';
   }
 
   return 'session';

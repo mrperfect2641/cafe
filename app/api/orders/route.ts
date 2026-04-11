@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { OrderStatus } from '@/app/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
+import { getOrdersForSession } from '@/lib/server/orders/get-orders';
 import { requirePermission } from '@/lib/rbac/requirePermission';
+
+const ORDER_STATUSES = ['CREATED', 'PAID', 'FULFILLED', 'CANCELLED'] as const satisfies readonly OrderStatus[];
 
 const lineSchema = z.object({
   productId: z.string().min(1),
@@ -18,6 +22,71 @@ const createOrderSchema = z.object({
 });
 
 const TOTAL_EPS = 0.06;
+
+function parseYmdToLocalStart(ymd: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return dt;
+}
+
+function parseYmdToLocalEnd(ymd: string): Date | null {
+  const start = parseYmdToLocalStart(ymd);
+  if (!start) return null;
+  const end = new Date(start);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+export async function GET(req: Request) {
+  const auth = await requirePermission('orders:read');
+  if (!auth.ok) return auth.response;
+
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get('search')?.trim() || undefined;
+
+  const statusRaw = searchParams.get('status')?.trim();
+  let status: OrderStatus | undefined;
+  if (statusRaw) {
+    if (!(ORDER_STATUSES as readonly string[]).includes(statusRaw)) {
+      return NextResponse.json(
+        { error: 'Invalid status', allowed: ORDER_STATUSES },
+        { status: 400 },
+      );
+    }
+    status = statusRaw as OrderStatus;
+  }
+
+  const fromRaw = searchParams.get('fromDate')?.trim();
+  const toRaw = searchParams.get('toDate')?.trim();
+  let fromDate: Date | undefined;
+  let toDate: Date | undefined;
+  if (fromRaw) {
+    const d = parseYmdToLocalStart(fromRaw);
+    if (!d) {
+      return NextResponse.json({ error: 'Invalid fromDate (use YYYY-MM-DD)' }, { status: 400 });
+    }
+    fromDate = d;
+  }
+  if (toRaw) {
+    const d = parseYmdToLocalEnd(toRaw);
+    if (!d) {
+      return NextResponse.json({ error: 'Invalid toDate (use YYYY-MM-DD)' }, { status: 400 });
+    }
+    toDate = d;
+  }
+
+  const orders = await getOrdersForSession({
+    filters: { search, status, fromDate, toDate },
+  });
+
+  return NextResponse.json(orders);
+}
 
 export async function POST(req: Request) {
   const auth = await requirePermission('billing:checkout');
@@ -63,6 +132,7 @@ export async function POST(req: Request) {
         tax: tax.toFixed(2),
         discount: discount.toFixed(2),
         status: 'CREATED',
+        createdByUserId: auth.session.user.id,
       },
     });
 
