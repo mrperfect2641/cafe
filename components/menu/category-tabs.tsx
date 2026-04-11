@@ -9,7 +9,7 @@ type CategoryTabsProps = {
   categories: CategoryDTO[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  isAdmin: boolean;
+  canManageMenu: boolean;
   onAddCategory: () => void;
   disabled?: boolean;
 };
@@ -18,7 +18,7 @@ export function CategoryTabs({
   categories,
   selectedId,
   onSelect,
-  isAdmin,
+  canManageMenu,
   onAddCategory,
   disabled,
 }: CategoryTabsProps) {
@@ -52,7 +52,7 @@ export function CategoryTabs({
           );
         })}
       </div>
-      {isAdmin ? (
+      {canManageMenu ? (
         <Button
           type="button"
           size="sm"

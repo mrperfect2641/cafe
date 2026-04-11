@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAdminSession } from '@/lib/require-admin-api';
+import { requirePermission } from '@/lib/rbac/requirePermission';
 
 export async function GET() {
-  const auth = await requireAdminSession();
+  const auth = await requirePermission('staff:manage');
   if (!auth.ok) return auth.response;
 
   const rows = await prisma.user.findMany({

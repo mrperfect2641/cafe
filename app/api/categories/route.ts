@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAuthSession } from '@/lib/require-auth-api';
-import { requireAdminSession } from '@/lib/require-admin-api';
+import { requirePermission } from '@/lib/rbac/requirePermission';
 
 export async function GET() {
   const auth = await requireAuthSession();
@@ -21,7 +21,7 @@ const createCategorySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const auth = await requireAdminSession();
+  const auth = await requirePermission('menu:write');
   if (!auth.ok) return auth.response;
 
   let body: unknown;

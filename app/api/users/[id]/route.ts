@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAdminSession } from '@/lib/require-admin-api';
+import { requirePermission } from '@/lib/rbac/requirePermission';
 
 const updateUserSchema = z.object({
   name: z.string().min(1).max(80),
@@ -12,7 +12,7 @@ const updateUserSchema = z.object({
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PUT(req: Request, ctx: RouteContext) {
-  const auth = await requireAdminSession();
+  const auth = await requirePermission('staff:manage');
   if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
@@ -61,7 +61,7 @@ export async function PUT(req: Request, ctx: RouteContext) {
 }
 
 export async function DELETE(_req: Request, ctx: RouteContext) {
-  const auth = await requireAdminSession();
+  const auth = await requirePermission('staff:manage');
   if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import type { CategoryDTO, ProductDTO } from '@/types/menu';
 
 type MenuManagementProps = {
-  isAdmin: boolean;
+  canManageMenu: boolean;
 };
 
 function CategoryBarSkeleton() {
@@ -44,7 +44,7 @@ function ProductGridSkeleton() {
   );
 }
 
-export function MenuManagement({ isAdmin }: MenuManagementProps) {
+export function MenuManagement({ canManageMenu }: MenuManagementProps) {
   const [categories, setCategories] = useState<CategoryDTO[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [products, setProducts] = useState<ProductDTO[]>([]);
@@ -184,7 +184,7 @@ export function MenuManagement({ isAdmin }: MenuManagementProps) {
           categories={categories}
           selectedId={selectedCategoryId}
           onSelect={setSelectedCategoryId}
-          isAdmin={isAdmin}
+          canManageMenu={canManageMenu}
           onAddCategory={() => setAddCategoryOpen(true)}
           disabled={mutationBusy}
         />
@@ -201,7 +201,7 @@ export function MenuManagement({ isAdmin }: MenuManagementProps) {
               : 'Select a category'}
           </p>
         </div>
-        {isAdmin ? (
+        {canManageMenu ? (
           <Button
             type="button"
             size="sm"
@@ -218,7 +218,7 @@ export function MenuManagement({ isAdmin }: MenuManagementProps) {
       {!selectedCategoryId && !categoriesLoading && categories.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-muted/20 py-16 text-center">
           <p className="text-muted-foreground">No categories yet.</p>
-          {isAdmin ? (
+          {canManageMenu ? (
             <Button
               type="button"
               variant="outline"
@@ -234,7 +234,7 @@ export function MenuManagement({ isAdmin }: MenuManagementProps) {
       ) : products.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-muted/20 py-16 text-center transition-colors">
           <p className="text-muted-foreground">No items in this category.</p>
-          {isAdmin ? (
+          {canManageMenu ? (
             <Button
               type="button"
               variant="outline"
@@ -253,7 +253,7 @@ export function MenuManagement({ isAdmin }: MenuManagementProps) {
               <ProductCard
                 key={p.id}
                 product={p}
-                isAdmin={isAdmin}
+                canManageMenu={canManageMenu}
                 onDelete={openDelete}
                 disabled={mutationBusy}
               />

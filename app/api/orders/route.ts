@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { requireAuthSession } from '@/lib/require-auth-api';
+import { requirePermission } from '@/lib/rbac/requirePermission';
 
 const lineSchema = z.object({
   productId: z.string().min(1),
@@ -20,13 +20,8 @@ const createOrderSchema = z.object({
 const TOTAL_EPS = 0.06;
 
 export async function POST(req: Request) {
-  const auth = await requireAuthSession();
+  const auth = await requirePermission('billing:checkout');
   if (!auth.ok) return auth.response;
-
-  const role = auth.session.user.role;
-  if (role !== 'ADMIN' && role !== 'MANAGER' && role !== 'STAFF') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   let body: unknown;
   try {

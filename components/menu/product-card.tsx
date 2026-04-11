@@ -9,12 +9,12 @@ import type { ProductDTO } from '@/types/menu';
 
 type ProductCardProps = {
   product: ProductDTO;
-  isAdmin: boolean;
+  canManageMenu: boolean;
   onDelete: (p: ProductDTO) => void;
   disabled?: boolean;
 };
 
-export function ProductCard({ product, isAdmin, onDelete, disabled }: ProductCardProps) {
+export function ProductCard({ product, canManageMenu, onDelete, disabled }: ProductCardProps) {
   return (
     <motion.div
       layout
@@ -39,7 +39,7 @@ export function ProductCard({ product, isAdmin, onDelete, disabled }: ProductCar
             ) : null}
           </div>
         </div>
-        {isAdmin ? (
+        {canManageMenu ? (
           <Button
             type="button"
             variant="ghost"

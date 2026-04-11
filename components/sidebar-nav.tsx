@@ -31,7 +31,7 @@ const navItems: NavItem[] = [
   {
     href: '/users',
     label: 'Users',
-    roles: ['ADMIN'],
+    roles: ['ADMIN', 'MANAGER'],
     icon: Users,
   },
   {
@@ -49,7 +49,7 @@ const navItems: NavItem[] = [
   {
     href: '/menu',
     label: 'Menu',
-    roles: ['ADMIN', 'MANAGER', 'STAFF'],
+    roles: ['ADMIN', 'MANAGER'],
     icon: ShoppingBag,
   },
   {

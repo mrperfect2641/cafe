@@ -6,7 +6,7 @@ export default function UsersPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">User management</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          View, edit, or remove staff accounts. Admin access only.
+          View, edit, or remove staff accounts. Admins and managers with staff access.
         </p>
       </div>
       <UserTable />
