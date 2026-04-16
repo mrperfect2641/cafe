@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CheckCircle2, QrCode, ShoppingBag } from 'lucide-react';
+import { CheckCircle2, CreditCard, QrCode, ShoppingBag, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 import { PosCategoryTabs } from '@/components/billing/pos-category-tabs';
@@ -15,11 +15,31 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getBillingTotals, useBillingCartStore } from '@/store/billing-cart-store';
+import { useSettings } from '@/hooks/useSettings';
 import type { CategoryDTO, ProductDTO } from '@/types/menu';
 
 type BillingPosProps = {
   cashierName: string;
 };
+
+type PaymentMethod = 'cash' | 'upi' | 'card';
+
+type OrdersResponse = {
+  orders: Array<{
+    id: string;
+    customerName: string;
+    total: string;
+    status: string;
+    createdAt: string;
+  }>;
+};
+
+function toLocalYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function ProductGridSkeleton() {
   return (
@@ -43,15 +63,21 @@ export function BillingPos({ cashierName }: BillingPosProps) {
   const [productsLoading, setProductsLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
+  const [productSearch, setProductSearch] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [tableNo, setTableNo] = useState('');
 
   const [qrOpen, setQrOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [discountMode, setDiscountMode] = useState<'amount' | 'percent'>('amount');
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [recentOrders, setRecentOrders] = useState<OrdersResponse['orders']>([]);
 
   const {
     items,
     gstPercent,
+    serviceChargePercent,
     discount,
     addProduct,
     increment,
@@ -59,11 +85,13 @@ export function BillingPos({ cashierName }: BillingPosProps) {
     remove,
     clear,
     setGstPercent,
+    setServiceChargePercent,
     setDiscount,
   } = useBillingCartStore(
     useShallow((s) => ({
       items: s.items,
       gstPercent: s.gstPercent,
+      serviceChargePercent: s.serviceChargePercent,
       discount: s.discount,
       addProduct: s.addProduct,
       increment: s.increment,
@@ -71,14 +99,67 @@ export function BillingPos({ cashierName }: BillingPosProps) {
       remove: s.remove,
       clear: s.clear,
       setGstPercent: s.setGstPercent,
+      setServiceChargePercent: s.setServiceChargePercent,
       setDiscount: s.setDiscount,
     })),
   );
 
-  const { subtotal, gstAmount, total } = useMemo(
-    () => getBillingTotals({ items, gstPercent, discount }),
-    [items, gstPercent, discount],
+  const { settings } = useSettings();
+  const discountsEnabled = settings.enable_discounts;
+  const todayYmd = useMemo(() => toLocalYmd(new Date()), []);
+
+  useEffect(() => {
+    setGstPercent(settings.tax_percentage);
+    setServiceChargePercent(settings.service_charge);
+    if (!settings.enable_discounts) {
+      setDiscount(0);
+    }
+  }, [
+    settings.tax_percentage,
+    settings.service_charge,
+    settings.enable_discounts,
+    setGstPercent,
+    setServiceChargePercent,
+    setDiscount,
+  ]);
+
+  const { subtotal, gstAmount, serviceChargeAmount, taxAmount, total } = useMemo(
+    () => getBillingTotals({ items, gstPercent, serviceChargePercent, discount }),
+    [items, gstPercent, serviceChargePercent, discount],
   );
+
+  useEffect(() => {
+    if (!discountsEnabled) {
+      setDiscountMode('amount');
+      setDiscountPercent(0);
+      return;
+    }
+    if (discountMode !== 'percent') return;
+    const pct = Number.isFinite(discountPercent) ? Math.max(0, Math.min(100, discountPercent)) : 0;
+    const computed = Math.round((subtotal * (pct / 100)) * 100) / 100;
+    setDiscount(computed);
+  }, [discountMode, discountPercent, subtotal, discountsEnabled, setDiscount]);
+
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => p.name.toLowerCase().includes(q));
+  }, [products, productSearch]);
+
+  const loadRecentOrders = useCallback(async () => {
+    try {
+      const qs = new URLSearchParams({ fromDate: todayYmd, toDate: todayYmd });
+      const res = await fetch(`/api/orders?${qs.toString()}`, { cache: 'no-store' });
+      const json = (await res.json().catch(() => null)) as OrdersResponse | { error?: string } | null;
+      if (!res.ok || !json || !('orders' in json)) {
+        setRecentOrders([]);
+        return;
+      }
+      setRecentOrders((json as OrdersResponse).orders.slice(0, 5));
+    } catch {
+      setRecentOrders([]);
+    }
+  }, [todayYmd]);
 
   const loadCategories = useCallback(async () => {
     setCategoriesLoading(true);
@@ -133,6 +214,10 @@ export function BillingPos({ cashierName }: BillingPosProps) {
     void loadProducts(selectedCategoryId);
   }, [selectedCategoryId, loadProducts]);
 
+  useEffect(() => {
+    void loadRecentOrders();
+  }, [loadRecentOrders]);
+
   const handleAddProduct = useCallback(
     (p: ProductDTO) => {
       addProduct({
@@ -151,35 +236,43 @@ export function BillingPos({ cashierName }: BillingPosProps) {
       lines: items,
       subtotal,
       gstPercent,
-      gstAmount,
+      gstAmount: taxAmount,
       discount,
       total,
       issuedAt: new Date(),
-    };
-  }, [customerName, tableNo, items, subtotal, gstPercent, gstAmount, discount, total]);
+    }; // keep payload shape stable; gstAmount now includes service charge.
+  }, [customerName, tableNo, items, subtotal, gstPercent, taxAmount, discount, total]);
 
   const handleCompleteOrder = useCallback(async () => {
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      toast.error('Cart is empty');
+      return;
+    }
+    if (!paymentMethod) {
+      toast.error('Select a payment method');
+      return;
+    }
     setCompleting(true);
     try {
-      const name =
-        `${customerName.trim() || 'Walk-in'}${tableNo.trim() ? ` · Table ${tableNo.trim()}` : ''}`.slice(
-          0,
-          200,
-        );
+      const baseName = customerName.trim() || 'Walk-in';
+      const tablePart = tableNo.trim() ? ` · Table ${tableNo.trim()}` : '';
+      const payPart = paymentMethod ? ` · Pay ${paymentMethod.toUpperCase()}` : '';
+      const name = `${baseName}${tablePart}${payPart}`.slice(0, 200);
 
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: name,
+          tableNo: tableNo.trim() || undefined,
+          paymentMethod,
           items: items.map((i) => ({
             productId: i.productId,
             quantity: i.quantity,
             price: i.price,
           })),
-          tax: gstAmount,
-          discount,
+          tax: taxAmount,
+          discount: discountsEnabled ? discount : 0,
           total,
         }),
       });
@@ -193,12 +286,14 @@ export function BillingPos({ cashierName }: BillingPosProps) {
       clear();
       setCustomerName('');
       setTableNo('');
+      setPaymentMethod(null);
+      void loadRecentOrders();
     } catch {
       toast.error('Order failed');
     } finally {
       setCompleting(false);
     }
-  }, [items, customerName, tableNo, gstAmount, discount, total, clear]);
+  }, [items, paymentMethod, customerName, tableNo, taxAmount, discountsEnabled, discount, total, clear, loadRecentOrders]);
 
   const cartEmpty = items.length === 0;
   const actionsDisabled = cartEmpty || completing;
@@ -241,6 +336,18 @@ export function BillingPos({ cashierName }: BillingPosProps) {
         )}
 
         <div className="min-h-[200px]">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Input
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              placeholder="Search products…"
+              disabled={productsLoading || completing}
+              className="border-white/15 bg-white/5 text-white placeholder:text-zinc-500 sm:max-w-sm"
+            />
+            <div className="text-xs text-zinc-400">
+              Showing <span className="font-semibold text-white">{filteredProducts.length}</span>
+            </div>
+          </div>
           {productsLoading ? (
             <ProductGridSkeleton />
           ) : (
@@ -249,7 +356,7 @@ export function BillingPos({ cashierName }: BillingPosProps) {
               className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
             >
               <AnimatePresence mode="popLayout">
-                {products.map((p) => (
+                {filteredProducts.map((p) => (
                   <PosProductCard
                     key={p.id}
                     product={p}
@@ -260,8 +367,10 @@ export function BillingPos({ cashierName }: BillingPosProps) {
               </AnimatePresence>
             </motion.div>
           )}
-          {!productsLoading && selectedCategoryId && products.length === 0 ? (
-            <p className="py-12 text-center text-sm text-zinc-500">No products in this category.</p>
+          {!productsLoading && selectedCategoryId && filteredProducts.length === 0 ? (
+            <p className="py-12 text-center text-sm text-zinc-500">
+              {productSearch.trim() ? 'No matching products.' : 'No products in this category.'}
+            </p>
           ) : null}
         </div>
       </motion.div>
@@ -328,12 +437,71 @@ export function BillingPos({ cashierName }: BillingPosProps) {
             subtotal={subtotal}
             gstPercent={gstPercent}
             gstAmount={gstAmount}
+            serviceChargePercent={serviceChargePercent}
+            serviceChargeAmount={serviceChargeAmount}
             discount={discount}
+            discountMode={discountMode}
+            discountPercent={discountPercent}
             total={total}
             onGstPercentChange={setGstPercent}
+            onServiceChargePercentChange={setServiceChargePercent}
             onDiscountChange={setDiscount}
+            onDiscountModeChange={(mode) => {
+              setDiscountMode(mode);
+              if (mode === 'amount') setDiscountPercent(0);
+            }}
+            onDiscountPercentChange={setDiscountPercent}
+            discountsEnabled={discountsEnabled}
             disabled={completing}
           />
+
+          <div className="space-y-2 rounded-xl border border-white/10 bg-black/30 p-4">
+            <p className="text-sm font-semibold text-white">Payment</p>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('cash')}
+                disabled={completing}
+                className={
+                  paymentMethod === 'cash'
+                    ? 'flex items-center justify-center gap-2 rounded-lg border border-[#ff9800]/60 bg-[#ff9800]/15 px-3 py-2 text-sm font-semibold text-white'
+                    : 'flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-white/10'
+                }
+              >
+                <Wallet className="h-4 w-4" />
+                Cash
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('upi')}
+                disabled={completing}
+                className={
+                  paymentMethod === 'upi'
+                    ? 'flex items-center justify-center gap-2 rounded-lg border border-[#ff9800]/60 bg-[#ff9800]/15 px-3 py-2 text-sm font-semibold text-white'
+                    : 'flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-white/10'
+                }
+              >
+                <QrCode className="h-4 w-4" />
+                UPI
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('card')}
+                disabled={completing}
+                className={
+                  paymentMethod === 'card'
+                    ? 'flex items-center justify-center gap-2 rounded-lg border border-[#ff9800]/60 bg-[#ff9800]/15 px-3 py-2 text-sm font-semibold text-white'
+                    : 'flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-white/10'
+                }
+              >
+                <CreditCard className="h-4 w-4" />
+                Card
+              </button>
+            </div>
+            <p className="text-xs text-zinc-500">
+              Payment method is used for POS workflow (storage will be wired when backend supports it).
+            </p>
+          </div>
 
           <div className="space-y-2 pt-1">
             <Button
@@ -356,6 +524,97 @@ export function BillingPos({ cashierName }: BillingPosProps) {
               <CheckCircle2 className="h-4 w-4" />
               {completing ? 'Saving…' : 'Complete order'}
             </Button>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-black/30 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-white">Recent orders</p>
+              <button
+                type="button"
+                onClick={() => void loadRecentOrders()}
+                disabled={completing}
+                className="text-xs font-medium text-[#ff9800] hover:underline"
+              >
+                Refresh
+              </button>
+            </div>
+            <div className="mt-3 space-y-2">
+              {recentOrders.length === 0 ? (
+                <p className="text-sm text-zinc-500">No recent orders today.</p>
+              ) : (
+                recentOrders.map((o) => (
+                  <div
+                    key={o.id}
+                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-xs text-zinc-500">{o.id}</p>
+                      <p className="truncate text-sm font-medium text-white">{o.customerName}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs text-zinc-400">{o.status}</p>
+                      <p className="text-xs text-zinc-500">
+                        {Math.max(0, Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 60000))}m ago
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Print template (used by PrintBill) */}
+          <div id="print-area" className="hidden">
+            <h1>Smart Cafe</h1>
+            <div className="muted">
+              <div>{new Date().toLocaleString()}</div>
+              <div>Cashier: {cashierName}</div>
+              <div>Customer: {customerName.trim() || 'Walk-in'}</div>
+              {tableNo.trim() ? <div>Table: {tableNo.trim()}</div> : null}
+              {paymentMethod ? <div>Payment: {paymentMethod.toUpperCase()}</div> : null}
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th className="num">Qty</th>
+                  <th className="num">Price</th>
+                  <th className="num">Line</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((l) => (
+                  <tr key={l.productId}>
+                    <td>{l.name}</td>
+                    <td className="num">{l.quantity}</td>
+                    <td className="num">{l.price.toFixed(2)}</td>
+                    <td className="num">{(l.price * l.quantity).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="summary">
+              <div>
+                <span>Subtotal</span>
+                <span>{subtotal.toFixed(2)}</span>
+              </div>
+              <div>
+                <span>GST ({gstPercent}%)</span>
+                <span>{gstAmount.toFixed(2)}</span>
+              </div>
+              <div>
+                <span>Service ({serviceChargePercent}%)</span>
+                <span>{serviceChargeAmount.toFixed(2)}</span>
+              </div>
+              <div>
+                <span>Discount</span>
+                <span>{(discountsEnabled ? discount : 0).toFixed(2)}</span>
+              </div>
+              <div className="total">
+                <span>Total</span>
+                <span>{total.toFixed(2)}</span>
+              </div>
+            </div>
           </div>
         </div>
       </aside>

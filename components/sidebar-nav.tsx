@@ -37,7 +37,7 @@ const navItems: NavItem[] = [
   {
     href: '/billing',
     label: 'Billing',
-    roles: ['ADMIN', 'MANAGER', 'STAFF'],
+    roles: ['STAFF'],
     icon: ReceiptText,
   },
   {

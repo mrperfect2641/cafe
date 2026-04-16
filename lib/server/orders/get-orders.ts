@@ -7,6 +7,7 @@ export type OrderListFilters = {
   status?: OrderStatus;
   fromDate?: Date;
   toDate?: Date;
+  payment?: string;
 };
 
 /** Row returned by GET /api/orders (JSON-safe). */
@@ -53,6 +54,13 @@ function buildWhere(filters: OrderListFilters): Prisma.OrderWhereInput {
 
   if (filters.status) {
     andParts.push({ status: filters.status });
+  }
+
+  // Payment model is not persisted yet. Keep filter contract stable:
+  // - payment=NOT_RECORDED => include all known rows
+  // - any other payment filter => currently no matches
+  if (filters.payment && filters.payment !== 'NOT_RECORDED') {
+    andParts.push({ id: '__NO_MATCH_FOR_PAYMENT__' });
   }
 
   const createdRange: Prisma.DateTimeFilter = {};

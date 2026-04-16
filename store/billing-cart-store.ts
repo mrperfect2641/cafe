@@ -11,6 +11,8 @@ type BillingCartState = {
   items: CartLine[];
   /** GST as percentage of subtotal (e.g. 5 = 5%) */
   gstPercent: number;
+  /** Service charge as percentage of subtotal */
+  serviceChargePercent: number;
   /** Fixed discount in currency units */
   discount: number;
   addProduct: (p: { productId: string; name: string; price: number }) => void;
@@ -19,6 +21,7 @@ type BillingCartState = {
   remove: (productId: string) => void;
   clear: () => void;
   setGstPercent: (value: number) => void;
+  setServiceChargePercent: (value: number) => void;
   setDiscount: (value: number) => void;
 };
 
@@ -39,6 +42,7 @@ export function computeTotal(subtotal: number, gstAmount: number, discount: numb
 export const useBillingCartStore = create<BillingCartState>((set) => ({
   items: [],
   gstPercent: 5,
+  serviceChargePercent: 0,
   discount: 0,
 
   addProduct: ({ productId, name, price }) => {
@@ -85,6 +89,11 @@ export const useBillingCartStore = create<BillingCartState>((set) => ({
     set({ gstPercent: n });
   },
 
+  setServiceChargePercent: (value) => {
+    const n = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+    set({ serviceChargePercent: n });
+  },
+
   setDiscount: (value) => {
     const n = Number.isFinite(value) ? Math.max(0, value) : 0;
     set({ discount: n });
@@ -93,10 +102,12 @@ export const useBillingCartStore = create<BillingCartState>((set) => ({
 
 /** Selector helpers for use outside React / tests */
 export function getBillingTotals(
-  state: Pick<BillingCartState, 'items' | 'gstPercent' | 'discount'>,
+  state: Pick<BillingCartState, 'items' | 'gstPercent' | 'serviceChargePercent' | 'discount'>,
 ) {
   const subtotal = computeSubtotal(state.items);
   const gstAmount = computeGstAmount(subtotal, state.gstPercent);
-  const total = computeTotal(subtotal, gstAmount, state.discount);
-  return { subtotal, gstAmount, total };
+  const serviceChargeAmount = computeGstAmount(subtotal, state.serviceChargePercent);
+  const taxAmount = Math.round((gstAmount + serviceChargeAmount) * 100) / 100;
+  const total = computeTotal(subtotal, taxAmount, state.discount);
+  return { subtotal, gstAmount, serviceChargeAmount, taxAmount, total };
 }

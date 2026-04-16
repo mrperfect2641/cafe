@@ -4,7 +4,7 @@ import { resolveAnalyticsDateRange } from '@/lib/server/analytics/date-range';
 import { requirePermission } from '@/lib/rbac/requirePermission';
 
 export async function GET(req: Request) {
-  const auth = await requirePermission('analytics:admin');
+  const auth = await requirePermission('reports:view');
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(req.url);

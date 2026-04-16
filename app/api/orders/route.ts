@@ -15,6 +15,8 @@ const lineSchema = z.object({
 
 const createOrderSchema = z.object({
   customerName: z.string().trim().min(1).max(200),
+  tableNo: z.string().trim().max(50).optional(),
+  paymentMethod: z.enum(['cash', 'upi', 'card']).optional(),
   items: z.array(lineSchema).min(1),
   tax: z.coerce.number().min(0),
   discount: z.coerce.number().min(0),
@@ -49,6 +51,7 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search')?.trim() || undefined;
+  const payment = searchParams.get('payment')?.trim() || undefined;
 
   const statusRaw = searchParams.get('status')?.trim();
   let status: OrderStatus | undefined;
@@ -82,15 +85,30 @@ export async function GET(req: Request) {
   }
 
   const orders = await getOrdersForSession({
-    filters: { search, status, fromDate, toDate },
+    filters: { search, status, fromDate, toDate, payment },
   });
 
-  return NextResponse.json(orders);
+  const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total), 0).toFixed(2);
+  const pendingOrders = orders.filter((order) => order.status === 'CREATED').length;
+  const completedOrders = orders.filter((order) => order.status === 'FULFILLED').length;
+
+  return NextResponse.json({
+    orders,
+    summary: {
+      totalOrders: orders.length,
+      totalRevenue,
+      pendingOrders,
+      completedOrders,
+    },
+  });
 }
 
 export async function POST(req: Request) {
   const auth = await requirePermission('billing:checkout');
   if (!auth.ok) return auth.response;
+  if (auth.session.user.role === 'MANAGER') {
+    return NextResponse.json({ error: 'Managers are not allowed to create orders' }, { status: 403 });
+  }
 
   let body: unknown;
   try {

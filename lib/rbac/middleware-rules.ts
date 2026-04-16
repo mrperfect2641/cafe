@@ -12,7 +12,7 @@ export function pagePermissionForPath(pathname: string): Permission | null {
     return 'staff:manage';
   }
   if (pathname.startsWith('/menu')) {
-    return 'menu:write';
+    return 'menu:read';
   }
   if (pathname.startsWith('/settings')) {
     return 'settings:manage';
@@ -53,8 +53,16 @@ export function apiAccessFor(pathname: string, method: string): ApiAccess {
     return method === 'POST' ? 'billing:checkout' : 'session';
   }
 
+  if (pathname.startsWith('/api/settings')) {
+    return method === 'GET' ? 'session' : 'settings:manage';
+  }
+
   if (pathname.startsWith('/api/analytics')) {
-    return 'analytics:admin';
+    return 'reports:view';
+  }
+
+  if (pathname.startsWith('/api/manager/dashboard')) {
+    return 'reports:view';
   }
 
   return 'session';

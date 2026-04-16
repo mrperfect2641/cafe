@@ -15,15 +15,13 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-const ALL: Permission[] = [...PERMISSIONS];
-
 /**
- * ADMIN: full access.
- * MANAGER: menu + staff + reports + POS (billing:checkout keeps existing manager POS behavior).
+ * ADMIN: business-owner controls (no billing checkout, no menu writes).
+ * MANAGER: menu + staff + reports + POS.
  * STAFF: billing and orders only; menu catalog uses authenticated GET on APIs (no menu:write).
  */
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
-  ADMIN: ALL,
+  ADMIN: ['orders:read', 'menu:read', 'staff:manage', 'reports:view', 'analytics:admin', 'settings:manage'],
   MANAGER: [
     'billing:checkout',
     'orders:read',

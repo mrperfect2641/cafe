@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
+import { UserFilters, type UserFiltersState } from '@/components/users/user-filters';
 import { UserRow } from '@/components/users/user-row';
+import { UserSummaryCards } from '@/components/users/user-summary-cards';
 import { UserModal, type UserModalMode } from '@/components/users/user-modal';
 import type { UserPublic } from '@/types/user';
 
@@ -15,6 +17,16 @@ export function UserTable() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [filters, setFilters] = useState<UserFiltersState>({
+    search: '',
+    role: '',
+    status: '',
+  });
+  const [appliedFilters, setAppliedFilters] = useState<UserFiltersState>({
+    search: '',
+    role: '',
+    status: '',
+  });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<UserModalMode>(null);
@@ -67,31 +79,86 @@ export function UserTable() {
     setUsers((prev) => prev.filter((u) => u.id !== id));
   }, []);
 
+  const filteredUsers = useMemo(() => {
+    const search = appliedFilters.search.trim().toLowerCase();
+    return users.filter((user) => {
+      const searchOk =
+        !search ||
+        user.name.toLowerCase().includes(search) ||
+        user.email.toLowerCase().includes(search);
+      const roleOk = !appliedFilters.role || user.role === appliedFilters.role;
+      const statusOk =
+        !appliedFilters.status ||
+        (appliedFilters.status === 'active' ? user.isActive : !user.isActive);
+      return searchOk && roleOk && statusOk;
+    });
+  }, [users, appliedFilters]);
+
+  const summary = useMemo(
+    () => ({
+      totalUsers: users.length,
+      staffCount: users.filter((u) => u.role === 'STAFF').length,
+      managerCount: users.filter((u) => u.role === 'MANAGER').length,
+      inactiveCount: users.filter((u) => !u.isActive).length,
+    }),
+    [users],
+  );
+
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-        Loading users…
+      <div className="space-y-4">
+        <UserSummaryCards
+          totalUsers={summary.totalUsers}
+          staffCount={summary.staffCount}
+          managerCount={summary.managerCount}
+          inactiveCount={summary.inactiveCount}
+        />
+        <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+          Loading users…
+        </div>
       </div>
     );
   }
 
   if (fetchError) {
     return (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center">
-        <p className="text-sm text-destructive">{fetchError}</p>
-        <button
-          type="button"
-          className="mt-3 text-sm font-medium text-primary underline"
-          onClick={() => void loadUsers()}
-        >
-          Retry
-        </button>
+      <div className="space-y-4">
+        <UserSummaryCards
+          totalUsers={summary.totalUsers}
+          staffCount={summary.staffCount}
+          managerCount={summary.managerCount}
+          inactiveCount={summary.inactiveCount}
+        />
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center">
+          <p className="text-sm text-destructive">{fetchError}</p>
+          <button
+            type="button"
+            className="mt-3 text-sm font-medium text-primary underline"
+            onClick={() => void loadUsers()}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <>
+      <div className="space-y-4">
+        <UserSummaryCards
+          totalUsers={summary.totalUsers}
+          staffCount={summary.staffCount}
+          managerCount={summary.managerCount}
+          inactiveCount={summary.inactiveCount}
+        />
+        <UserFilters
+          value={filters}
+          onChange={setFilters}
+          onApply={() => setAppliedFilters(filters)}
+          disabled={actionLoading}
+        />
+      </div>
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
@@ -115,14 +182,14 @@ export function UserTable() {
               </tr>
             </thead>
             <tbody>
-              {users.length === 0 ? (
+              {filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    No users found.
+                    No users match the current filters.
                   </td>
                 </tr>
               ) : (
-                users.map((u) => (
+                filteredUsers.map((u) => (
                   <UserRow
                     key={u.id}
                     user={u}
