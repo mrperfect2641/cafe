@@ -14,7 +14,9 @@ function shouldAttemptJsonParse(value: string): boolean {
     return true;
   }
 
-  return /^-?\d+(\.\d+)?$/.test(trimmed);
+  // Do not parse bare numbers: digit-only strings are valid settings values (e.g. phone)
+  // and JSON.parse would turn them into numbers, breaking string fields on read.
+  return false;
 }
 
 export function parseStoredSettingValue(value: string): unknown {

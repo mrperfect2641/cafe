@@ -567,7 +567,7 @@ export function BillingPos({ cashierName }: BillingPosProps) {
           <div id="print-area" className="hidden">
             <h1>Smart Cafe</h1>
             <div className="muted">
-              <div>{new Date().toLocaleString()}</div>
+              <div suppressHydrationWarning>{new Date().toLocaleString()}</div>
               <div>Cashier: {cashierName}</div>
               <div>Customer: {customerName.trim() || 'Walk-in'}</div>
               {tableNo.trim() ? <div>Table: {tableNo.trim()}</div> : null}

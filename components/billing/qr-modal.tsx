@@ -28,10 +28,6 @@ export function QrModal({ open, onClose, amount, note }: QrModalProps) {
       return;
     }
 
-    // Debug: verify env is inlined on client bundle (restart dev server after .env.local changes).
-    // eslint-disable-next-line no-console
-    console.log('NEXT_PUBLIC_UPI_VPA:', process.env.NEXT_PUBLIC_UPI_VPA);
-
     const uri = buildUpiPayUri(amount, note);
     if (!uri) {
       setMessage('UPI QR is not configured yet. Ask your admin to set NEXT_PUBLIC_UPI_VPA.');

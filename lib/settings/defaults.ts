@@ -53,7 +53,10 @@ function asBoolean(value: unknown, fallback: boolean): boolean {
 }
 
 function asString(value: unknown, fallback: string): string {
-  return typeof value === 'string' ? value : fallback;
+  if (typeof value === 'string') return value;
+  // Legacy: phone and similar fields were parsed as JSON numbers from digit-only DB values
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return fallback;
 }
 
 function asPaymentMethods(value: unknown, fallback: string[]): string[] {
